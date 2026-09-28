@@ -3,3 +3,4 @@ openpyxl
 snowflake-connector-python[pandas]
 python-dotenv
 scikit-learn
+snowflake-sqlalchemy
