@@ -1,0 +1,5 @@
+pandas
+openpyxl
+snowflake-connector-python[pandas]
+python-dotenv
+scikit-learn
