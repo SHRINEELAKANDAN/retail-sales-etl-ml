@@ -1,54 +1,67 @@
 import os
 import pandas as pd
-import snowflake.connector
 from dotenv import load_dotenv
 from sklearn.cluster import KMeans
 from sklearn.preprocessing import StandardScaler
-from snowflake.connector.pandas_tools import write_pandas
+from sqlalchemy import create_engine, text
+from snowflake.sqlalchemy import URL
 
 load_dotenv()
 
-conn = snowflake.connector.connect(
-    account=os.getenv("sf_account"),
-    user=os.getenv("sf_user"),
-    password=os.getenv("sf_password"),
-    warehouse=os.getenv("sf_warehouse"),
-    database=os.getenv("sf_database"),
-    schema=os.getenv("sf_schema")
+engine = create_engine(
+    URL(
+        account=os.getenv("sf_account"),
+        user=os.getenv("sf_user"),
+        password=os.getenv("sf_password"),
+        warehouse=os.getenv("sf_warehouse"),
+        database=os.getenv("sf_database"),
+        schema="ANALYTICS"
+    )
 )
 
 query = """
-SELECT customer_id, total_orders, total_spend, avg_sales_line, 
-        unique_products, recency_days
+SELECT 
+    customer_id, 
+    total_orders, 
+    total_spend,
+    avg_sales_line, 
+    unique_products,
+    recency_days
 FROM RETAIL_DB.ANALYTICS.CUSTOMER_FEATURES
 """
 
-df = pd.read_sql(query, conn)
-df.columns = [column.lower() for column in df.columns]
+try:
+    with engine.connect() as sqlalchemy_conn:
+        df = pd.read_sql_query(text(query), sqlalchemy_conn)
 
-features = [
-    "total_orders", 
-    "total_spend", 
-    "avg_sales_line", 
-    "unique_products", 
-    "recency_days"
-]
+    df.columns = df.columns.str.lower()
 
-scaled_features = StandardScaler().fit_transform(df[features])
+    features = [
+        "total_orders", 
+        "total_spend", 
+        "avg_sales_line", 
+        "unique_products", 
+        "recency_days"
+    ]
 
-model = KMeans(n_clusters=3, random_state=42, n_init=10)
+    scaled_features = StandardScaler().fit_transform(df[features])
 
-df["customer_segment"] = model.fit_predict(scaled_features)
+    model = KMeans(n_clusters=3, random_state=42, n_init=10)
 
-df.columns =[column.upper() for column in df.columns]
+    df["customer_segment"] = model.fit_predict(scaled_features)
 
-success, nchunks, nrows,_ = write_pandas(
-    conn=conn,
-    df=df,
-    table_name="CUSTOMER_SEGMENTATION",
-    auto_create_table=True,
-    overwrite=True
-)
+    df.columns =df.columns.str.upper()
 
-print(f"Load successful: {success}; Chunks: {nchunks}; Rows loaded: {nrows}")
-conn.close()
+    df.to_sql(
+        "CUSTOMER_SEGMENTATION", 
+        con=engine, 
+        schema=os.getenv("ANALYTICS"), 
+        if_exists="replace", 
+        index=False,
+        method="multi"
+    )
+
+    print("Customer segmentation completed and results loaded to Snowflake.")
+
+finally:
+    engine.dispose()
