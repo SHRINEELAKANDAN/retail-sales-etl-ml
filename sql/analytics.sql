@@ -10,14 +10,25 @@ FROM RETAIL_DB.ANALYTICS.CUSTOMER_SEGMENTATION
 GROUP BY customer_segment
 ORDER BY avg_total_spend DESC;
 
+
+
+
+
+SELECT
+    customer_segment,
+    COUNT(*) AS customers
+FROM RETAIL_DB.ANALYTICS.CUSTOMER_SEGMENTATION
+GROUP BY customer_segment
+ORDER BY customer_segment;
+
 -- Monthly Revenue trend Analysis
 SELECT 
-    DATA_TRUNC('MONTH', invoice_date) AS sales_month,
+    DATE_TRUNC('MONTH', invoice_date) AS sales_month,
     ROUND(SUM(sales_amount), 2) AS total_revenue,
-    COUNT(DISTINCT invoice_id) AS total_orders,
+    COUNT(DISTINCT invoice_no) AS total_orders,
     COUNT(DISTINCT customer_id) AS active_customers
 FROM FACT_SALES
-GROUP BY sales_month
+GROUP BY DATE_TRUNC('MONTH', invoice_date)
 ORDER BY sales_month;
 
 -- Top 10 Products by Revenue
@@ -48,7 +59,7 @@ ORDER BY total_revenue DESC;
 SELECT 
     COUNT(*) AS customer_count,
     ROUND(
-        COUNT(*) * 100.0 / (SELECT COUNT(*)) OVER(),
+        COUNT(*) * 100.0 / SUM(COUNT(*)) OVER(),
         2
     ) AS customer_percentage
 FROM CUSTOMER_SEGMENTATION
